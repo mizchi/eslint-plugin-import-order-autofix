@@ -1,4 +1,4 @@
-# eslint-plugin-import-order-autofix
+# eslint-plugin-import-order-autosorter
 
 This plugin is an extension of the lovely and more stable [eslint-plugin-import](https://github.com/benmosher/eslint-plugin-import) to enable `--fix` for import/order.
 
@@ -7,7 +7,7 @@ With this change import order set by `"groups"` and `"newlines-between`" will wh
 ## Setup
 
 ```javascript
-npm install --save eslint-plugin-import-order-autofix
+npm install --save eslint-plugin-import-order-autosorter
 ```
 
 ## Configuration

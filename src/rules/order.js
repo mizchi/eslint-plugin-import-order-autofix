@@ -1,32 +1,30 @@
-'use strict'
-
-require('./../core/add-types');
-
-import { EOL } from 'os';
+import './../core/add-types'
+import { EOL } from 'os'
 import importType from '../core/importType'
 import isStaticRequire from '../core/staticRequire'
-import parser from 'babel-eslint';
+import parser from 'babel-eslint'
+import jscodeshift from 'jscodeshift'
 
-import jscodeshift from 'jscodeshift';
-const j = jscodeshift.withParser(parser);
+const j = jscodeshift.withParser(parser)
 
-jscodeshift.types.Type.def('ExperimentalSpreadProperty').bases('Node');
-jscodeshift.types.Type.def('ExperimentalRestProperty').bases('Node');
-
-jscodeshift.types.finalize();
+jscodeshift.types.Type.def('ExperimentalSpreadProperty').bases('Node')
+jscodeshift.types.Type.def('ExperimentalRestProperty').bases('Node')
+jscodeshift.types.finalize()
 
 const defaultGroups = ['builtin', 'external', 'parent', 'sibling', 'index']
 
 // REPORTING
 
 function reverse(array) {
-  return array.map(function (v) {
-    return {
-      name: v.name,
-      rank: -v.rank,
-      node: v.node,
-    }
-  }).reverse()
+  return array
+    .map(function(v) {
+      return {
+        name: v.name,
+        rank: -v.rank,
+        node: v.node,
+      }
+    })
+    .reverse()
 }
 
 function findOutOfOrder(imported) {
@@ -34,7 +32,7 @@ function findOutOfOrder(imported) {
     return []
   }
   let maxSeenRankNode = imported[0]
-  return imported.filter(function (importedModule) {
+  return imported.filter(function(importedModule) {
     const res = importedModule.rank < maxSeenRankNode.rank
     if (maxSeenRankNode.rank < importedModule.rank) {
       maxSeenRankNode = importedModule
@@ -43,63 +41,60 @@ function findOutOfOrder(imported) {
   })
 }
 
+function findRootNode(n, root, node) {
+  let result = null
 
-function findRootNode(j, root, node) {
-  let result = null;
-
-  root
-    .find(j.Node)
-    .filter((p) => p.node === node).forEach(p => {
-    let parent = p;
+  root.find(n.Node).filter(p => p.node === node).forEach(p => {
+    let parent = p
 
     while (parent.parent != null && parent.parent.value.body == null) {
-      parent = parent.parent;
+      parent = parent.parent
     }
 
-    result = parent;
-  });
+    result = parent
+  })
 
-  return result;
+  return result
 }
 
 function fixOutOfOrder(context, firstNode, secondNode, order) {
-  const sourceCode = context.getSourceCode();
-  const root = j(sourceCode.ast);
+  const sourceCode = context.getSourceCode()
+  const root = j(sourceCode.ast)
 
-  const firstRoot = findRootNode(j, root, firstNode.node);
-  const secondRoot = findRootNode(j, root, secondNode.node);
-  const newCode = sourceCode.getText(secondRoot.node);
+  const firstRoot = findRootNode(j, root, firstNode.node)
+  const secondRoot = findRootNode(j, root, secondNode.node)
+  const newCode = sourceCode.getText(secondRoot.node)
 
-  const msg = () => `\`${secondNode.name}\` import should occur ${order}` +
-    ` import \`${firstNode.name}\``;
+  const msg = () =>
+    `\`${secondNode.name}\` import should occur ${order}` + ` import \`${firstNode.name}\``
 
   if (order === 'before') {
     context.report({
       node: secondNode.node,
       message: msg(),
-      fix: fixer => fixer.insertTextBefore(firstRoot.node, newCode)
-    });
+      fix: fixer => fixer.insertTextBefore(firstRoot.node, newCode + '\n'),
+    })
   } else if (order === 'after') {
     context.report({
       node: secondNode.node,
       message: msg(),
-      fix: fixer => fixer.insertTextAfter(firstRoot.node, newCode)
-    });
+      fix: fixer => fixer.insertTextAfter(firstRoot.node, '\n' + newCode),
+    })
   }
 
   context.report({
     node: secondNode.node,
     message: msg(),
-    fix: fixer => fixer.remove(secondRoot.node)
-  });
+    fix: fixer => fixer.remove(secondRoot.node),
+  })
 }
 
 function reportOutOfOrder(context, imported, outOfOrder, order) {
-  outOfOrder.forEach(function (imp) {
+  outOfOrder.forEach(function(imp) {
     const found = imported.find(function hasHigherRank(importedItem) {
       return importedItem.rank > imp.rank
     })
-    fixOutOfOrder(context, found, imp, order);
+    fixOutOfOrder(context, found, imp, order)
   })
 }
 
@@ -121,20 +116,18 @@ function makeOutOfOrderReport(context, imported) {
 // DETECTING
 
 function computeRank(context, ranks, name, type) {
-  return ranks[importType(name, context)] +
-    (type === 'import' ? 0 : 100)
+  return ranks[importType(name, context)] + (type === 'import' ? 0 : 100)
 }
 
 function registerNode(context, node, name, type, ranks, imported) {
   const rank = computeRank(context, ranks, name, type)
   if (rank !== -1) {
-    imported.push({name, rank, node})
+    imported.push({ name, rank, node })
   }
 }
 
 function isInVariableDeclarator(node) {
-  return node &&
-    (node.type === 'VariableDeclarator' || isInVariableDeclarator(node.parent))
+  return node && (node.type === 'VariableDeclarator' || isInVariableDeclarator(node.parent))
 }
 
 const types = ['builtin', 'external', 'internal', 'parent', 'sibling', 'index']
@@ -149,8 +142,9 @@ function convertGroupsToRanks(groups) {
     }
     group.forEach(function(groupItem) {
       if (types.indexOf(groupItem) === -1) {
-        throw new Error('Incorrect configuration of the rule: Unknown type `' +
-          JSON.stringify(groupItem) + '`')
+        throw new Error(
+          'Incorrect configuration of the rule: Unknown type `' + JSON.stringify(groupItem) + '`'
+        )
       }
       if (res[groupItem] !== undefined) {
         throw new Error('Incorrect configuration of the rule: `' + groupItem + '` is duplicated')
@@ -171,56 +165,55 @@ function convertGroupsToRanks(groups) {
 }
 
 function fixNewLineAfterImport(context, previousImport) {
-  const root = j(context.getSourceCode().ast);
+  const root = j(context.getSourceCode().ast)
 
-  const prevRoot = findRootNode(j, root, previousImport.node);
+  const prevRoot = findRootNode(j, root, previousImport.node)
 
-  return (fixer) => fixer.insertTextAfter(prevRoot.node, EOL);
+  return fixer => fixer.insertTextAfter(prevRoot.node, EOL)
 }
 
 function removeNewLineAfterImport(context, currentImport, previousImport) {
-  const root = j(context.getSourceCode().ast);
+  const root = j(context.getSourceCode().ast)
 
-  const prevRoot = findRootNode(j, root, previousImport.node);
-  const currRoot = findRootNode(j, root, currentImport.node);
+  const prevRoot = findRootNode(j, root, previousImport.node)
+  const currRoot = findRootNode(j, root, currentImport.node)
 
-  return (fixer) => fixer.removeRange([prevRoot.node.range[1] + 1, currRoot.node.range[0]]);
+  return fixer => fixer.removeRange([prevRoot.node.range[1] + 1, currRoot.node.range[0]])
 }
 
-function makeNewlinesBetweenReport (context, imported, newlinesBetweenImports) {
+function makeNewlinesBetweenReport(context, imported, newlinesBetweenImports) {
   const getNumberOfEmptyLinesBetween = (currentImport, previousImport) => {
-    const linesBetweenImports = context.getSourceCode().lines.slice(
-      previousImport.node.loc.end.line,
-      currentImport.node.loc.start.line - 1
-    )
+    const linesBetweenImports = context
+      .getSourceCode()
+      .lines.slice(previousImport.node.loc.end.line, currentImport.node.loc.start.line - 1)
 
-    return linesBetweenImports.filter((line) => !line.trim().length).length
+    return linesBetweenImports.filter(line => !line.trim().length).length
   }
 
   let previousImport = imported[0]
 
   imported.slice(1).forEach(function(currentImport) {
-    const emptyLinesCount = getNumberOfEmptyLinesBetween(currentImport, previousImport);
+    const emptyLinesCount = getNumberOfEmptyLinesBetween(currentImport, previousImport)
     if (newlinesBetweenImports === 'always') {
       if (currentImport.rank !== previousImport.rank && emptyLinesCount === 0) {
         context.report({
           node: previousImport.node,
           message: 'There should be at least one empty line between import groups',
-          fix: fixNewLineAfterImport(context, previousImport)
-        });
+          fix: fixNewLineAfterImport(context, previousImport),
+        })
       } else if (currentImport.rank === previousImport.rank && emptyLinesCount > 0) {
         context.report({
           node: previousImport.node,
           message: 'There should be no empty line within import group',
-          fix: removeNewLineAfterImport(context, currentImport, previousImport)
-        });
+          fix: removeNewLineAfterImport(context, currentImport, previousImport),
+        })
       }
     } else if (emptyLinesCount > 0) {
       context.report({
         node: previousImport.node,
         message: 'There should be no empty line between import groups',
-        fix: removeNewLineAfterImport(context, currentImport, previousImport)
-      });
+        fix: removeNewLineAfterImport(context, currentImport, previousImport),
+      })
     }
 
     previousImport = currentImport
@@ -239,7 +232,7 @@ module.exports = {
             type: 'array',
           },
           'newlines-between': {
-            enum: [ 'ignore', 'always', 'never' ],
+            enum: ['ignore', 'always', 'never'],
           },
         },
         additionalProperties: false,
@@ -247,7 +240,7 @@ module.exports = {
     ],
   },
 
-  create: function importOrderRule (context) {
+  create: function importOrderRule(context) {
     const options = context.options[0] || {}
     const newlinesBetweenImports = options['newlines-between'] || 'ignore'
     let ranks
@@ -274,7 +267,8 @@ module.exports = {
 
     return {
       ImportDeclaration: function handleImports(node) {
-        if (node.specifiers.length) { // Ignoring unassigned imports
+        if (node.specifiers.length) {
+          // Ignoring unassigned imports
           const name = node.source.value
           registerNode(context, node, name, 'import', ranks, imported)
         }

@@ -1,3 +1,3 @@
 export const rules = {
-  'order': require('./rules/order')
-};
+  'order': require('./rules/order'),
+}

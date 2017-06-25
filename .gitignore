@@ -22,3 +22,4 @@ node_modules
 # generated output
 lib/
 **/.nyc_output/
+_playground

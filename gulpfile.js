@@ -1,6 +1,6 @@
 var gulp = require('gulp')
   , babel = require('gulp-babel')
-  , rimraf = require('rimraf');
+  , rimraf = require('rimraf')
 
 var SRC = 'src/**/*.js'
   , DEST = 'lib'
